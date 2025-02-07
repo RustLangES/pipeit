@@ -1,13 +1,13 @@
 use core::ops::BitOr;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 struct Pipe;
 
-struct Cancel {
+struct Cancellable {
     cancelled: Arc<AtomicBool>,
 }
 
-struct Pipelined {
+struct Pipelined<T> {
     value: T,
     token: Option<Cancellable>,
 }
@@ -16,7 +16,10 @@ impl<T> BitOr<T> for Pipe {
     type Output = Pipelined<T>;
 
     fn bitor(self, it: T) -> Self::Output {
-        Pipelined(it)
+        Pipelined {
+            value: it,
+            token: None,
+        }
     }
 }
 
@@ -24,7 +27,10 @@ impl<T, U, F: FnOnce(T) -> U> BitOr<F> for Pipelined<T> {
     type Output = Pipelined<U>;
 
     fn bitor(self, f: F) -> Self::Output {
-        Pipelined(f(self.0))
+        Pipelined {
+            value: f(self.value),
+            token: self.token,
+        }
     }
 }
 
@@ -34,7 +40,7 @@ impl<T> BitOr<It> for Pipelined<T> {
     type Output = T;
 
     fn bitor(self, _: It) -> T {
-        self.0
+        self.value
     }
 }
 
@@ -68,6 +74,8 @@ fn debug_with<T: std::fmt::Debug, U: ToString>(msg: U) -> impl Fn(T) -> T {
 
 #[cfg(test)]
 mod tests {
+    use crate::*;
+
     #[test]
     fn first_try() {
         let result = Pipe
