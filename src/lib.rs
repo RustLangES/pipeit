@@ -1,71 +1,54 @@
-use std::{
-    marker::PhantomData,
-    ops::BitOr,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::ops::BitOr;
 pub struct Start;
 pub struct End;
 
-pub struct Pipe<State = Start> {
-    token: Option<Cancellable>,
-    __phantom: PhantomData<State>,
-}
-
-impl Pipe<Start> {
-    pub fn new() -> Pipe<Start> {
-        Pipe {
-            token: None,
-            __phantom: PhantomData::<Start>,
-        }
-    }
-}
-
-impl Pipe<Start> {
-    pub fn end() -> Pipe<End> {
-        Pipe {
-            token: None,
-            __phantom: PhantomData::<End>,
-        }
-    }
-}
-
-pub struct Cancellable {
-    cancelled: Arc<AtomicBool>,
-}
-
-pub struct Pipelined<T> {
+pub struct Pipe<T> {
+    token: Cancellable,
     value: T,
-    token: Option<Cancellable>,
 }
 
-impl<T> BitOr<T> for Pipe<Start> {
-    type Output = Pipelined<T>;
-
-    fn bitor(self, it: T) -> Self::Output {
-        Pipelined {
-            value: it,
-            token: None,
+impl<T> Pipe<T> {
+    pub fn new(value: T) -> Pipe<T> {
+        Self {
+            token: Cancellable::None,
+            value,
         }
     }
 }
 
-impl<T, U, F: FnOnce(T) -> U> BitOr<F> for Pipelined<T> {
-    type Output = Pipelined<U>;
+impl<T: Default> Pipe<T> {
+    pub fn empty() -> Pipe<T> {
+        Pipe {
+            token: Cancellable::None,
+            value: T::default(),
+        }
+    }
+}
+
+#[derive(Default)]
+enum Cancellable {
+    #[default]
+    None,
+    Stop,
+}
+
+pub struct Unwrap;
+
+impl<T, U, F: FnOnce(T) -> U> BitOr<F> for Pipe<T> {
+    type Output = Pipe<U>;
 
     fn bitor(self, f: F) -> Self::Output {
-        Pipelined {
+        Pipe {
+            token: Cancellable::None,
             value: f(self.value),
-            token: self.token,
         }
     }
 }
 
-pub struct It;
-
-impl<T> BitOr<Pipe<End>> for Pipelined<T> {
+impl<T> BitOr<Unwrap> for Pipe<T> {
     type Output = T;
 
-    fn bitor(self, _: Pipe<End>) -> T {
+    fn bitor(self, _: Unwrap) -> Self::Output {
         self.value
     }
 }
@@ -80,8 +63,10 @@ mod tests {
 
     #[test]
     fn first_try() {
-        let result = Pipe::new() | 5 | power_of_two | Pipe::end();
+        let result = Pipe::new(5) | power_of_two;
+        assert_eq!(result.value, 25);
 
+        let result = result | Unwrap;
         assert_eq!(result, 25);
     }
 }

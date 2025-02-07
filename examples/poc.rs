@@ -13,7 +13,7 @@ fn change_to_string(x: i32) -> Option<String> {
 }
 
 fn unwrap_or<T: Clone>(or: T) -> impl FnOnce(Option<T>) -> T {
-    move |v: Option<T>| -> _ { v.unwrap_or(or) }
+    move |v| v.unwrap_or(or)
 }
 
 fn debug<T: std::fmt::Debug>(x: T) -> T {
@@ -22,7 +22,7 @@ fn debug<T: std::fmt::Debug>(x: T) -> T {
 }
 
 fn debug_with<T: std::fmt::Debug, U: ToString>(msg: U) -> impl Fn(T) -> T {
-    move |x: T| -> _ {
+    move |x| {
         println!("{} {x:?}", msg.to_string());
         x
     }
@@ -34,15 +34,14 @@ fn push_str(mut x: String) -> String {
 }
 
 fn main() {
-    let result = Pipe::new()
-        | 5
+    let result = Pipe::new(5)
         | debug_with("the value of the pipe is:")
         | power_of_two
         | change_to_string
         | unwrap_or(String::from("hello, world"))
         | debug
         | push_str
-        | Pipe::end();
+        | Unwrap;
 
     println!("{result:?}");
 }
