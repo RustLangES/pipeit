@@ -1,9 +1,8 @@
-use core::ops::BitOr;
 use std::{
     marker::PhantomData,
+    ops::BitOr,
     sync::{atomic::AtomicBool, Arc},
 };
-
 pub struct Start;
 pub struct End;
 

@@ -28,6 +28,11 @@ fn debug_with<T: std::fmt::Debug, U: ToString>(msg: U) -> impl Fn(T) -> T {
     }
 }
 
+fn push_str(mut x: String) -> String {
+    x.push_str(" <3");
+    x.to_string()
+}
+
 fn main() {
     let result = Pipe::new()
         | 5
@@ -36,6 +41,7 @@ fn main() {
         | change_to_string
         | unwrap_or(String::from("hello, world"))
         | debug
+        | push_str
         | Pipe::end();
 
     println!("{result:?}");
