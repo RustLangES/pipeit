@@ -1,7 +1,34 @@
 use core::ops::BitOr;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    marker::PhantomData,
+    sync::{atomic::AtomicBool, Arc},
+};
 
-pub struct Pipe;
+pub struct Start;
+pub struct End;
+
+pub struct Pipe<State = Start> {
+    token: Option<Cancellable>,
+    __phantom: PhantomData<State>,
+}
+
+impl Pipe<Start> {
+    pub fn new() -> Pipe<Start> {
+        Pipe {
+            token: None,
+            __phantom: PhantomData::<Start>,
+        }
+    }
+}
+
+impl Pipe<Start> {
+    pub fn end() -> Pipe<End> {
+        Pipe {
+            token: None,
+            __phantom: PhantomData::<End>,
+        }
+    }
+}
 
 pub struct Cancellable {
     cancelled: Arc<AtomicBool>,
@@ -12,7 +39,7 @@ pub struct Pipelined<T> {
     token: Option<Cancellable>,
 }
 
-impl<T> BitOr<T> for Pipe {
+impl<T> BitOr<T> for Pipe<Start> {
     type Output = Pipelined<T>;
 
     fn bitor(self, it: T) -> Self::Output {
@@ -36,10 +63,10 @@ impl<T, U, F: FnOnce(T) -> U> BitOr<F> for Pipelined<T> {
 
 pub struct It;
 
-impl<T> BitOr<It> for Pipelined<T> {
+impl<T> BitOr<Pipe<End>> for Pipelined<T> {
     type Output = T;
 
-    fn bitor(self, _: It) -> T {
+    fn bitor(self, _: Pipe<End>) -> T {
         self.value
     }
 }
@@ -54,7 +81,7 @@ mod tests {
 
     #[test]
     fn first_try() {
-        let result = Pipe | 5 | power_of_two | It;
+        let result = Pipe::new() | 5 | power_of_two | Pipe::end();
 
         assert_eq!(result, 25);
     }

@@ -29,14 +29,14 @@ fn debug_with<T: std::fmt::Debug, U: ToString>(msg: U) -> impl Fn(T) -> T {
 }
 
 fn main() {
-    let result = Pipe
+    let result = Pipe::new()
         | 5
         | debug_with("the value of the pipe is:")
         | power_of_two
         | change_to_string
         | unwrap_or(String::from("hello, world"))
         | debug
-        | It;
+        | Pipe::end();
 
     println!("{result:?}");
 }
