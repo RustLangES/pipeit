@@ -41,7 +41,7 @@ fn main() {
         | unwrap_or(String::from("hello, world"))
         | debug
         | push_str
-        | Unwrap;
+        | It;
 
     println!("{result:?}");
 }

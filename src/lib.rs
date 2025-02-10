@@ -1,55 +1,68 @@
-use std::ops::BitOr;
-pub struct Start;
-pub struct End;
+use core::ops::BitOr;
+use std::ops::Shr;
 
-pub struct Pipe<T> {
-    token: Cancellable,
+pub struct Pipe;
+pub struct Pipelined<T> {
     value: T,
 }
 
-impl<T> Pipe<T> {
-    pub fn new(value: T) -> Pipe<T> {
-        Self {
-            token: Cancellable::None,
-            value,
-        }
+pub struct CollectablePipe<T, U> {
+    value: Vec<Box<dyn Fn(T) -> U>>,
+}
+
+impl<T> BitOr<T> for Pipe {
+    type Output = Pipelined<T>;
+
+    fn bitor(self, it: T) -> Self::Output {
+        Pipelined { value: it }
     }
 }
 
-impl<T: Default> Pipe<T> {
-    pub fn empty() -> Pipe<T> {
-        Pipe {
-            token: Cancellable::None,
-            value: T::default(),
-        }
+impl<T, U, F: Fn(T) -> U + 'static> Shr<F> for Pipe {
+    type Output = CollectablePipe<T, U>;
+
+    fn shr(self, rhs: F) -> Self::Output {
+        let mut collectable = CollectablePipe {
+            value: Vec::with_capacity(1),
+        };
+        collectable.value.push(Box::new(rhs));
+        collectable
     }
 }
 
-#[derive(Default)]
-enum Cancellable {
-    #[default]
-    None,
-    Stop,
+impl<T, U, F: Fn(T) -> U + 'static> BitOr<F> for CollectablePipe<T, U> {
+    type Output = CollectablePipe<T, U>;
+
+    fn bitor(mut self, rhs: F) -> Self::Output {
+        self.value.push(Box::new(rhs));
+        self
+    }
 }
 
-pub struct Unwrap;
-
-impl<T, U, F: FnOnce(T) -> U> BitOr<F> for Pipe<T> {
-    type Output = Pipe<U>;
+impl<T, U, F: FnOnce(T) -> U> BitOr<F> for Pipelined<T> {
+    type Output = Pipelined<U>;
 
     fn bitor(self, f: F) -> Self::Output {
-        Pipe {
-            token: Cancellable::None,
+        Pipelined {
             value: f(self.value),
         }
     }
 }
 
-impl<T> BitOr<Unwrap> for Pipe<T> {
+pub struct It;
+impl<T> BitOr<It> for Pipelined<T> {
     type Output = T;
 
-    fn bitor(self, _: Unwrap) -> Self::Output {
+    fn bitor(self, _: It) -> T {
         self.value
+    }
+}
+
+impl<T: Clone, U: Default> BitOr<It> for CollectablePipe<T, U> {
+    type Output = Box<dyn Fn(T) -> U + 'static>;
+
+    fn bitor(self, _: It) -> Self::Output {
+        Box::new(move |mut v| self.value.iter().fold(U::default(), |acc, f| f(v)))
     }
 }
 
@@ -63,10 +76,16 @@ mod tests {
 
     #[test]
     fn first_try() {
-        let result = Pipe::new(5) | power_of_two;
-        assert_eq!(result.value, 25);
+        let result = Pipe | 5 | power_of_two | It;
 
-        let result = result | Unwrap;
+        assert_eq!(result, 25);
+    }
+
+    #[test]
+    fn second_try() {
+        let result = Pipe >> power_of_two | It;
+        let result = result(5);
+
         assert_eq!(result, 25);
     }
 }
